@@ -51,6 +51,21 @@
   .slider-label{font-size:14px;color:var(--muted)}
   .slider-label .ico{margin-right:6px;filter:saturate(.8)}
   .slider-val{font-family:Consolas,monospace;font-size:18px;color:var(--gold);font-weight:600}
+  .num-box{
+    display:inline-flex;align-items:center;gap:2px;background:#151210;border:1px solid var(--line);
+    border-radius:7px;padding:2px 8px 2px 4px;transition:border-color .15s, box-shadow .15s;
+  }
+  .num-box:focus-within{border-color:var(--gold);box-shadow:0 0 0 2px rgba(217,178,106,.18)}
+  .num-box .slider-num{
+    width:76px;background:transparent;border:0;outline:none;text-align:right;
+    font-family:Consolas,monospace;font-size:18px;font-weight:600;color:var(--gold);
+    -moz-appearance:textfield;
+  }
+  .num-box .slider-num::-webkit-outer-spin-button,
+  .num-box .slider-num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .num-box .unit{font-family:Consolas,monospace;font-size:13px;color:var(--muted)}
+  .num-box.invalid,.slider-num.invalid{color:var(--red)}
+  .num-box:has(.invalid){border-color:var(--red)}
   input[type=range]{
     -webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:4px;outline:none;
     background:linear-gradient(90deg,var(--gold) 0 var(--p,0%), #3a3330 var(--p,0%) 100%);
@@ -139,9 +154,14 @@
   <div class="wrap">
     <div>
       <div class="panel">
-        <h2>倍率滑桿（10% ~ 200%）</h2>
+        <h2>倍率設定 — 拉滑桿或直接輸入數字</h2>
         <div id="sliders"></div>
-        <button class="reset" id="resetBtn">全部重置為 10%（不增加）</button>
+        <button class="reset" id="resetBtn">全部重置為最小值</button>
+        <div class="hint" style="text-align:center">
+          前五項：<b>100% ~ 2000%</b>（100% = 1 倍，2000% = 20 倍）<br>
+          刷關等級：<b>1 ~ 20 級</b>（等級直接當倍數，不用填 %）<br>
+          數字框可直接打 <b>150</b>、<b>150%</b>、<b>1,200</b>，超出範圍會自動修正。
+        </div>
       </div>
 
       <div class="panel" style="margin-top:14px">
@@ -197,17 +217,25 @@
 
 <script>
 (function(){
-  const MIN = 10, MAX = 200, STEP = 1, N = 6;
+  const N = 6;
 
-  // 六根滑桿對應的項目名稱與圖示（順序固定）
+  // 六項設定（順序固定）。每項可自訂 min/max/step 與顯示單位。
+  //   mode='pct'  ：一般倍率，100%~2000%，存的是百分比，倍數 = 值 / 100
+  //   mode='lvl'  ：刷關等級，1~20 整數，值本身就是倍數
   const LABELS = [
-    { name: '敵人數量',   icon: '👥' },
-    { name: '敵人傷害',   icon: '⚔️' },
-    { name: '敵人HP',     icon: '💗' },
-    { name: '敵方速度',   icon: '💨' },
-    { name: '事件數量',   icon: '🎲' },
-    { name: '刷關等級',   icon: '⬆️' },
+    { name: '敵人數量', icon: '👥', mode: 'pct', min: 100,  max: 2000, step: 1, unit: '%', quick: [100, 500, 1000, 2000] },
+    { name: '敵人傷害', icon: '⚔️', mode: 'pct', min: 100,  max: 2000, step: 1, unit: '%', quick: [100, 500, 1000, 2000] },
+    { name: '敵人HP',   icon: '💗', mode: 'pct', min: 100,  max: 2000, step: 1, unit: '%', quick: [100, 500, 1000, 2000] },
+    { name: '敵方速度', icon: '💨', mode: 'pct', min: 100,  max: 2000, step: 1, unit: '%', quick: [100, 500, 1000, 2000] },
+    { name: '事件數量', icon: '🎲', mode: 'pct', min: 100,  max: 2000, step: 1, unit: '%', quick: [100, 500, 1000, 2000] },
+    { name: '刷關等級', icon: '⬆️', mode: 'lvl', min: 1,    max: 20,   step: 1, unit: '級', quick: [1, 5, 10, 20] },
   ];
+
+  // 取得某一項的「倍數」
+  function multOf(i, raw){
+    const cfg = LABELS[i];
+    return cfg.mode === 'pct' ? raw / 100 : raw;
+  }
 
   // ---------- 曲線模型 ----------
   // 以自然對數的分段三次 Hermite（單調、C1 連續）串接原本三個關鍵點，
@@ -273,31 +301,83 @@
 
   // ---------- 介面 ----------
   const slidersHost = document.getElementById('sliders');
-  const inputs = [], vals = [];
+  const inputs = [], nums = [];
 
   for (let i = 0; i < N; i++) {
+    const cfg = LABELS[i];
+    const quickBtns = cfg.quick
+      .map(v => `<button data-i="${i}" data-v="${v}">${v}${cfg.unit}</button>`).join('');
+
     const row = document.createElement('div');
     row.className = 'slider-row';
     row.innerHTML = `
       <div class="slider-top">
-        <span class="slider-label"><span class="ico">${LABELS[i].icon}</span>${LABELS[i].name}</span>
-        <span class="slider-val" id="v${i}">${MIN}%</span>
+        <span class="slider-label"><span class="ico">${cfg.icon}</span>${cfg.name}</span>
+        <span class="num-box">
+          <input type="number" class="slider-num" min="${cfg.min}" max="${cfg.max}" step="${cfg.step}"
+                 value="${cfg.min}" inputmode="numeric" id="n${i}" aria-label="${cfg.name}${cfg.unit}">
+          <span class="unit">${cfg.unit}</span>
+        </span>
       </div>
-      <input type="range" min="${MIN}" max="${MAX}" step="${STEP}" value="${MIN}" id="s${i}">
-      <div class="quick">
-        <button data-i="${i}" data-v="10">10%</button>
-        <button data-i="${i}" data-v="50">50%</button>
-        <button data-i="${i}" data-v="100">100%</button>
-        <button data-i="${i}" data-v="200">200%</button>
-      </div>`;
+      <input type="range" min="${cfg.min}" max="${cfg.max}" step="${cfg.step}" value="${cfg.min}" id="s${i}">
+      <div class="quick">${quickBtns}</div>`;
     slidersHost.appendChild(row);
-    inputs.push(row.querySelector('input'));
-    vals.push(row.querySelector('.slider-val'));
+    const range = row.querySelector('input[type=range]');
+    const num   = row.querySelector('.slider-num');
+    inputs.push(range);
+    nums.push(num);
+
+    // 滑桿 → 數字框
+    range.addEventListener('input', () => {
+      num.value = range.value;
+      num.classList.remove('invalid');
+      update();
+    });
+
+    // 數字框 → 滑桿（邊打邊同步，不用等失焦）
+    num.addEventListener('input', () => {
+      const v = clampNum(i, num.value);
+      if (v === null){ num.classList.add('invalid'); return; } // 暫時無效先不反應
+      num.classList.remove('invalid');
+      range.value = v;
+      update();
+    });
+
+    // 失焦時修正空白 / 越界值
+    num.addEventListener('blur', () => {
+      const v = clampNum(i, num.value);
+      const fixed = v === null ? cfg.min : v;
+      num.value = fixed;
+      num.classList.remove('invalid');
+      range.value = fixed;
+      update();
+    });
+
+    num.addEventListener('keydown', e => {
+      if (e.key === 'Enter'){ num.blur(); num.focus(); }
+    });
+  }
+
+  // 解析輸入：支援「150」「150%」「1,200」「 80 」，回傳夾在該項範圍內的整數
+  function clampNum(i, raw){
+    const cfg = LABELS[i];
+    if (raw === null || raw === undefined) return null;
+    const s = String(raw).replace(/[%\s,，]/g, '');
+    if (s === '' || s === '-' || s === '.') return null;
+    const n = Number(s);
+    if (!isFinite(n)) return null;
+    return Math.round(Math.min(cfg.max, Math.max(cfg.min, n)));
   }
 
   function setFill(el){
-    const p = ((+el.value - MIN) / (MAX - MIN)) * 100;
+    const cfg = LABELS[el.id.slice(1) | 0];
+    const p = ((+el.value - cfg.min) / (cfg.max - cfg.min)) * 100;
     el.style.setProperty('--p', p + '%');
+  }
+
+  function fmtVal(i, v){
+    const cfg = LABELS[i];
+    return cfg.mode === 'pct' ? v.toLocaleString('en-US') + '%' : v + cfg.unit;
   }
 
   // ---------- 畫曲線 ----------
@@ -403,7 +483,7 @@
 
   // ---------- 主更新 ----------
   function update(){
-    const mults = inputs.map(inp => +inp.value / 10); // 100% -> 10 倍
+    const mults = inputs.map((inp, i) => multOf(i, clampNum(i, inp.value)));
     const product = mults.reduce((a, b) => a * b, 1);
     const geo = Math.pow(product, 1 / N);
     const rate = rateOf(geo);
@@ -412,9 +492,11 @@
     document.getElementById('modeLine').innerHTML =
       `綜合倍數 <b>${geo.toFixed(2)}×</b>`;
 
+    // 滑桿填色 + 數字框同步（不覆蓋正在輸入中的內容）
     inputs.forEach((inp, i) => {
       setFill(inp);
-      vals[i].textContent = (+inp.value).toLocaleString('en-US') + '%';
+      const n = nums[i];
+      if (document.activeElement !== n && n.value !== inp.value) n.value = inp.value;
     });
 
     // 當前資訊
@@ -436,8 +518,14 @@
       </tr>`;
     }).join('');
 
+    const detail = mults.map((m, i) =>
+      LABELS[i].mode === 'pct'
+        ? `${fmtVal(i, clampNum(i, inputs[i].value))}=${m.toFixed(2)}×`
+        : `${LABELS[i].name} ${fmtVal(i, clampNum(i, inputs[i].value))}=${m.toFixed(2)}×`
+    ).join(' × ');
+
     document.getElementById('formula').innerHTML = `
-      (${mults.map(m => m.toFixed(2)).join(' × ')})<br>
+      ${detail}<br>
       = ${product.toFixed(4)}<br>
       <sup>6</sup>√${product.toFixed(4)} = <span style="color:var(--gold)">${geo.toFixed(4)} ×</span><br>
       掉落率 = <span style="color:var(--green)">${rate.toFixed(2)}%</span>
@@ -458,15 +546,21 @@
   });
   canvas.addEventListener('mouseleave', () => { hoverMult = null; update(); });
 
-  inputs.forEach(inp => inp.addEventListener('input', update));
   slidersHost.querySelectorAll('.quick button').forEach(btn => {
     btn.addEventListener('click', () => {
-      inputs[+btn.dataset.i].value = btn.dataset.v;
+      const i = +btn.dataset.i;
+      inputs[i].value = btn.dataset.v;
+      nums[i].value = btn.dataset.v;
+      nums[i].classList.remove('invalid');
       update();
     });
   });
   document.getElementById('resetBtn').addEventListener('click', () => {
-    inputs.forEach(inp => inp.value = MIN);
+    inputs.forEach((inp, i) => {
+      inp.value = LABELS[i].min;
+      nums[i].value = LABELS[i].min;
+      nums[i].classList.remove('invalid');
+    });
     update();
   });
 
