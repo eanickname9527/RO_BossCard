@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RO 道具掉落率計算器</title>
+<!-- 由 GitHub Actions 在部署時替換；本機直接開啟時保留原樣，視為 dev 版 -->
+<meta name="build-sha" content="{{COMMIT_SHA}}">
+<meta name="build-time" content="{{BUILD_TIME}}">
+<title>RO 王卡掉落率計算器</title>
 <style>
   :root{
     --bg:#12100f;
@@ -30,8 +33,8 @@
     color:var(--gold); margin:0 0 4px;
   }
   .sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:22px}
-  .wrap{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1fr 340px;gap:20px}
-  @media (max-width:860px){.wrap{grid-template-columns:1fr}}
+  .wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+  @media (max-width:900px){.wrap{grid-template-columns:1fr}}
   .panel{
     background:linear-gradient(180deg,var(--panel2),var(--panel));
     border:1px solid var(--line); border-radius:12px; padding:18px 20px;
@@ -41,9 +44,12 @@
     font-size:13px;letter-spacing:2px;color:var(--gold);margin:0 0 14px;font-weight:600;
     border-bottom:1px solid var(--line);padding-bottom:8px;
   }
+  #sliders{display:grid;grid-template-columns:1fr 1fr;gap:2px 22px}
+  @media (max-width:620px){#sliders{grid-template-columns:1fr}}
   .slider-row{margin-bottom:16px}
   .slider-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
   .slider-label{font-size:14px;color:var(--muted)}
+  .slider-label .ico{margin-right:6px;filter:saturate(.8)}
   .slider-val{font-family:Consolas,monospace;font-size:18px;color:var(--gold);font-weight:600}
   input[type=range]{
     -webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:4px;outline:none;
@@ -74,45 +80,78 @@
   }
   .big .k{font-size:12px;color:var(--muted);letter-spacing:2px}
   .big .v{font-family:Consolas,monospace;font-size:38px;font-weight:700;color:var(--green);line-height:1.15;margin-top:4px}
-  .mode{
-    text-align:center;font-size:13px;color:var(--muted);margin-top:4px;
-  }
+  .mode{text-align:center;font-size:13px;color:var(--muted);margin-top:4px}
   .mode b{color:var(--text)}
-  .tierbar{height:10px;border-radius:5px;overflow:hidden;background:#2a2422;display:flex}
-  .tierbar div{height:100%}
-  .legend{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-top:6px}
 
-  table.tiers{width:100%;border-collapse:collapse;font-size:13px}
-  table.tiers th,table.tiers td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line)}
-  table.tiers th{color:var(--muted);font-weight:500;font-size:12px}
-  table.tiers td:first-child,table.tiers th:first-child{text-align:left}
-  table.tiers tr.active{background:rgba(217,178,106,.12)}
-  table.tiers tr.active td{color:var(--gold);font-weight:600}
-  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-
+  /* 曲線圖 */
+  .chart-wrap{position:relative}
+  canvas#chart{width:100%;height:auto;display:block;border-radius:8px;cursor:crosshair}
+  .chart-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px}
   .next{margin-top:2px;font-size:13px;background:#151210;border:1px solid var(--line);border-radius:8px;padding:12px 14px}
   .next .row{display:flex;justify-content:space-between;margin:8px 0}
   .next .row span:first-child{color:var(--muted)}
   .next .row span:last-child{font-family:Consolas,monospace;color:var(--text)}
-  .progress{height:6px;background:#2a2422;border-radius:3px;overflow:hidden;margin-top:6px}
-  .progress i{display:block;height:100%;background:var(--blue);width:0%}
+  .next .row span:last-child.hi{color:var(--green)}
   .hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6}
   .reset{
     width:100%;padding:9px;border-radius:8px;background:#2d2825;border:1px solid var(--line);
     color:var(--muted);cursor:pointer;font-size:13px;letter-spacing:1px;
   }
   .reset:hover{color:var(--gold);border-color:var(--gold)}
+  .math{font-family:Consolas,monospace;font-size:13px;line-height:1.9}
+
+  /* 版本列 */
+  footer.version{
+    max-width:1120px;margin:28px auto 0;display:flex;flex-wrap:wrap;gap:10px 18px;
+    align-items:center;justify-content:center;font-size:12px;color:var(--muted);
+    border-top:1px solid var(--line);padding-top:16px;
+  }
+  footer.version code{
+    font-family:Consolas,monospace;background:#2d2825;border:1px solid var(--line);
+    padding:2px 7px;border-radius:5px;color:var(--gold);
+  }
+  #verStatus{display:inline-flex;align-items:center;gap:6px}
+  #verStatus .pill{
+    padding:2px 9px;border-radius:20px;font-size:11px;border:1px solid transparent;
+  }
+  .pill.ok{background:rgba(127,209,127,.14);color:var(--green);border-color:rgba(127,209,127,.35)}
+  .pill.new{background:rgba(217,178,106,.16);color:var(--gold);border-color:rgba(217,178,106,.45)}
+  .pill.err{background:rgba(224,122,106,.14);color:var(--red);border-color:rgba(224,122,106,.4)}
+  .pill.dev{background:rgba(127,181,224,.14);color:var(--blue);border-color:rgba(127,181,224,.4)}
+  .pill.checking{background:#2d2825;color:var(--muted);border-color:var(--line)}
+  #updateBar{
+    display:none;max-width:1120px;margin:0 auto 0;padding:9px 16px;border-radius:8px;
+    background:rgba(217,178,106,.12);border:1px solid rgba(217,178,106,.45);
+    color:var(--gold);font-size:13px;text-align:center;
+  }
+  #updateBar.show{display:block;margin-top:14px}
+  #updateBar button{
+    margin-left:12px;background:var(--gold);color:#201a10;border:0;border-radius:6px;
+    padding:3px 12px;font-size:12px;cursor:pointer;font-weight:600;
+  }
 </style>
 </head>
 <body>
   <h1>RO 王卡掉落率計算器</h1>
-  <div class="sub">六根滑桿倍數相乘後開六次方 = 綜合倍數，依倍數區間換算額外掉落率</div>
+  <div class="sub">六項倍數相乘開六次方 = 綜合倍數，掉落率沿著平滑曲線逐步成長（不再跳階）</div>
+  <div id="updateBar">發現 GitHub 上有更新版本 <button id="reloadBtn">立即更新</button></div>
 
   <div class="wrap">
-    <div class="panel">
-      <h2>倍率滑桿（100% ~ 2000%）</h2>
-      <div id="sliders"></div>
-      <button class="reset" id="resetBtn">全部重置為 100%</button>
+    <div>
+      <div class="panel">
+        <h2>倍率滑桿（10% ~ 200%）</h2>
+        <div id="sliders"></div>
+        <button class="reset" id="resetBtn">全部重置為 10%（不增加）</button>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h2>掉落率曲線</h2>
+        <div class="chart-wrap">
+          <canvas id="chart" width="760" height="300"></canvas>
+        </div>
+        <div class="chart-legend"><span>1×</span><span>5×</span><span>10×</span><span>20×</span><span>30×+</span></div>
+        <div class="hint">★ 是你的目前位置，虛線是平滑曲線上的對應值。整條曲線呈「前段爬升、後段趨緩」的 S 型。</div>
+      </div>
     </div>
 
     <div class="result-panel">
@@ -121,158 +160,308 @@
         <div class="big">
           <div class="k">額外掉落率</div>
           <div class="v" id="rate">0.00%</div>
-          <div class="mode" id="modeLine">未達門檻</div>
+          <div class="mode" id="modeLine">綜合倍數 1.00×</div>
         </div>
-      </div>
-
-      <div class="panel">
-        <h2>綜合倍數 / 檔位</h2>
-        <table class="tiers" id="tierTable">
-          <thead>
-            <tr><th>倍數</th><th>掉落率</th><th></th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <div class="tierbar" id="tierbar"></div>
-        <div class="legend"><span>0×</span><span>5×</span><span>10×</span><span>20×</span></div>
         <div class="next" id="nextInfo"></div>
       </div>
 
       <div class="panel">
+        <h2>參考點（曲線上的值）</h2>
+        <table class="tiers" style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr>
+              <th style="text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:8px 6px;border-bottom:1px solid var(--line)">倍數</th>
+              <th style="text-align:right;color:var(--muted);font-weight:500;font-size:12px;padding:8px 6px;border-bottom:1px solid var(--line)">掉落率</th>
+            </tr>
+          </thead>
+          <tbody id="refBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
         <h2>計算式</h2>
-        <div style="font-family:Consolas,monospace;font-size:13px;line-height:1.9" id="formula"></div>
+        <div class="math" id="formula"></div>
         <div class="hint">
-          規則：六根滑桿倍數相乘 → 開 6 次方（幾何平均）。<br>
-          5 倍以上 = 2%，10 倍以上 = 5%，20 倍以上 = 7.5%。
+          規則：敵人數量 × 敵人傷害 × 敵人HP × 敵方速度 × 事件數量 × 刷關等級 → 開 6 次方（幾何平均）。<br>
+          掉落率 = 曲線公式直接算出，倍數越大越接近上限；原訂 <b>5×≈2%</b>、<b>10×≈5%</b>、<b>20×≈7.5%</b> 三個點都保留在曲線上。
         </div>
       </div>
     </div>
   </div>
 
+  <footer class="version">
+    <span>版本 <code id="verSha">—</code></span>
+    <span id="verTime"></span>
+    <span id="verStatus"><span class="pill checking">檢查更新中…</span></span>
+  </footer>
+
 <script>
 (function(){
-  const MIN = 100, MAX = 2000, STEP = 1, N = 6;
+  const MIN = 10, MAX = 200, STEP = 1, N = 6;
 
-  // 倍數門檻由低到高
-  const TIERS = [
-    { mult: 1,  rate: 0,    color: '#3a3330' },
-    { mult: 5,  rate: 2,    color: '#7fb5e0' },
-    { mult: 10, rate: 5,    color: '#7fd17f' },
-    { mult: 20, rate: 7.5,  color: '#d9b26a' },
+  // 六根滑桿對應的項目名稱與圖示（順序固定）
+  const LABELS = [
+    { name: '敵人數量',   icon: '👥' },
+    { name: '敵人傷害',   icon: '⚔️' },
+    { name: '敵人HP',     icon: '💗' },
+    { name: '敵方速度',   icon: '💨' },
+    { name: '事件數量',   icon: '🎲' },
+    { name: '刷關等級',   icon: '⬆️' },
   ];
 
+  // ---------- 曲線模型 ----------
+  // 以自然對數的分段三次 Hermite（單調、C1 連續）串接原本三個關鍵點，
+  // 再用 y = 漸近上界 + (y0 - 上界)·e^(-k·x) 讓尾段平滑趨近上限。
+  const KEY = [ {x: Math.log(5), y: 2}, {x: Math.log(10), y: 5}, {x: Math.log(20), y: 7.5} ];
+  const CEIL = 9;          // 曲線漸近上限（%）
+  const KTAIL = 0.55;      // 尾段趨緩速度
+  const XMAX = Math.log(32); // 圖表橫軸上限（32×）
+
+  const slope0 = (KEY[1].y - KEY[0].y) / (KEY[1].x - KEY[0].x); // 起點斜率
+
+  function hermite(p0, p1, m0, m1, t){
+    const t2 = t*t, t3 = t2*t;
+    return (2*t3 - 3*t2 + 1)*p0 + (t3 - 2*t2 + t)*m0 + (-2*t3 + 3*t2)*p1 + (t3 - t2)*m1;
+  }
+
+  // 只做「平滑化」：先算分段 Hermite，再逐點檢查是否單調，若不是就降低斜率直到單調
+  let segSlopes = null;
+  function buildSlopes(){
+    const s0 = slope0;
+    let s1 = s0, s2 = s0;
+    const M = 4000;
+    for (let it = 0; it < 60; it++){
+      let ok = true, prev = -Infinity;
+      for (let i = 0; i <= M && ok; i++){
+        const v = evalHermite(i / M, s0, s1, s2);
+        if (v < prev - 1e-9) ok = false;
+        prev = v;
+      }
+      if (ok) break;
+      s1 *= 0.75; s2 *= 0.75;
+    }
+    segSlopes = [s0, s1, s2];
+  }
+
+  function evalHermite(t, s0, s1, s2){
+    if (t <= 0.5){
+      return hermite(KEY[0].y, KEY[1].y, s0*(KEY[1].x-KEY[0].x), s1*(KEY[1].x-KEY[0].x), t*2);
+    }
+    return hermite(KEY[1].y, KEY[2].y, s1*(KEY[2].x-KEY[1].x), s2*(KEY[2].x-KEY[1].x), (t-0.5)*2);
+  }
+
+  function rawRate(mult){
+    const x = Math.log(Math.max(mult, 1));
+    let y;
+    if (x <= KEY[0].x){
+      y = KEY[0].y * x / KEY[0].x;                 // 1× ~ 5×：線性從 0 爬升
+    } else if (x >= KEY[2].x){
+      y = CEIL + (KEY[2].y - CEIL) * Math.exp(-KTAIL * (x - KEY[2].x)); // 20× 之後平滑趨近上限
+    } else {
+      const t = (x - KEY[0].x) / (KEY[2].x - KEY[0].x);
+      y = evalHermite(t, segSlopes[0], segSlopes[1], segSlopes[2]);
+    }
+    return Math.max(0, y);
+  }
+
+  // 把原始曲線正規化成「1× 為 0%、5/10/20× 精準落在 2/5/7.5%」
+  let rate0 = 0;
+  function rateOf(mult){ return Math.max(0, rawRate(mult) - rate0); }
+
+  buildSlopes();
+  rate0 = rawRate(1);
+
+  // ---------- 介面 ----------
   const slidersHost = document.getElementById('sliders');
-  const inputs = [];
-  const vals = [];
+  const inputs = [], vals = [];
 
   for (let i = 0; i < N; i++) {
     const row = document.createElement('div');
     row.className = 'slider-row';
     row.innerHTML = `
       <div class="slider-top">
-        <span class="slider-label">滑桿 ${i + 1}</span>
-        <span class="slider-val" id="v${i}">100%</span>
+        <span class="slider-label"><span class="ico">${LABELS[i].icon}</span>${LABELS[i].name}</span>
+        <span class="slider-val" id="v${i}">${MIN}%</span>
       </div>
       <input type="range" min="${MIN}" max="${MAX}" step="${STEP}" value="${MIN}" id="s${i}">
       <div class="quick">
+        <button data-i="${i}" data-v="10">10%</button>
+        <button data-i="${i}" data-v="50">50%</button>
         <button data-i="${i}" data-v="100">100%</button>
-        <button data-i="${i}" data-v="500">500%</button>
-        <button data-i="${i}" data-v="1000">1000%</button>
-        <button data-i="${i}" data-v="2000">2000%</button>
+        <button data-i="${i}" data-v="200">200%</button>
       </div>`;
     slidersHost.appendChild(row);
     inputs.push(row.querySelector('input'));
     vals.push(row.querySelector('.slider-val'));
   }
 
-  function getRate(mult){
-    let rate = 0;
-    for (const t of TIERS) if (mult >= t.mult) rate = t.rate;
-    return rate;
-  }
-  function nextTier(mult){
-    for (const t of TIERS) if (t.mult > mult) return t;
-    return null;
-  }
-
-  function fmtPct(p){ return p.toLocaleString('en-US') + '%'; }
   function setFill(el){
     const p = ((+el.value - MIN) / (MAX - MIN)) * 100;
     el.style.setProperty('--p', p + '%');
   }
 
-  function update(){
-    const mults = inputs.map(inp => +inp.value / 100); // 100% -> 1.0
-    const product = mults.reduce((a, b) => a * b, 1);
-    const geo = Math.pow(product, 1 / N);
+  // ---------- 畫曲線 ----------
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PAD = { l: 46, r: 14, t: 14, b: 28 };
+  const YMAX = 9;
 
-    const rate = getRate(geo);
-    const nt = nextTier(geo);
+  function xToPx(x){ return PAD.l + (x / XMAX) * (W - PAD.l - PAD.r); }
+  function yToPx(y){ return H - PAD.b - (y / YMAX) * (H - PAD.t - PAD.b); }
+  function multToPx(m){ return xToPx(Math.log(Math.max(m, 1))); }
 
-    // 大數字
-    document.getElementById('rate').textContent = rate.toFixed(2) + '%';
-    const modeLine = document.getElementById('modeLine');
-    const hit = TIERS.filter(t => t.mult > 1 && geo >= t.mult).pop();
-    modeLine.innerHTML = hit
-      ? `已達成 <b>${hit.mult}×</b> 檔位`
-      : '未達 5× 門檻（0%）';
+  let hoverMult = null;
 
-    // 每根滑桿數值
-    inputs.forEach((inp, i) => {
-      setFill(inp);
-      vals[i].textContent = fmtPct(+inp.value);
+  function drawChart(curMult, curRate){
+    ctx.clearRect(0, 0, W, H);
+
+    // 背景
+    ctx.fillStyle = '#151210';
+    ctx.fillRect(0, 0, W, H);
+
+    // 網格
+    ctx.strokeStyle = '#2c2725';
+    ctx.lineWidth = 1;
+    ctx.font = '11px Consolas, monospace';
+    ctx.fillStyle = '#a99b88';
+    for (let y = 0; y <= YMAX; y += 1.5){
+      const py = yToPx(y);
+      ctx.beginPath(); ctx.moveTo(PAD.l, py); ctx.lineTo(W - PAD.r, py); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(y.toFixed(1) + '%', PAD.l - 6, py);
+    }
+    // 關鍵倍數
+    [1, 2, 3, 5, 10, 20, 30].forEach(m => {
+      const px = multToPx(m);
+      ctx.strokeStyle = (m === 5 || m === 10 || m === 20) ? '#3f3733' : '#262220';
+      ctx.beginPath(); ctx.moveTo(px, PAD.t); ctx.lineTo(px, H - PAD.b); ctx.stroke();
+      ctx.fillStyle = (m === 5 || m === 10 || m === 20) ? '#c9b48c' : '#8a7d6e';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(m + '×', px, H - PAD.b + 6);
     });
 
-    // 檔位表
-    const tbody = document.querySelector('#tierTable tbody');
-    tbody.innerHTML = TIERS.map(t => {
-      const isActive = getRate(geo) === t.rate && (t.rate > 0 || geo < 5);
-      return `<tr class="${isActive ? 'active' : ''}">
-        <td><span class="dot" style="background:${t.color}"></span>${t.mult}× 以上</td>
-        <td>${t.rate.toFixed(2)}%</td>
-        <td>${geo >= t.mult ? '✔' : ''}</td>
+    // 曲線
+    const grd = ctx.createLinearGradient(0, PAD.t, 0, H - PAD.b);
+    grd.addColorStop(0, 'rgba(127,209,127,.32)');
+    grd.addColorStop(1, 'rgba(127,209,127,0)');
+
+    const pts = [];
+    const STEPS = 600;
+    for (let i = 0; i <= STEPS; i++){
+      const x = (i / STEPS) * XMAX;
+      const m = Math.exp(x);
+      pts.push([xToPx(x), yToPx(rateOf(m))]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], H - PAD.b);
+    pts.forEach(p => ctx.lineTo(p[0], p[1]));
+    ctx.lineTo(pts[pts.length-1][0], H - PAD.b);
+    ctx.closePath();
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    ctx.beginPath();
+    pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.strokeStyle = '#7fd17f';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // 關鍵點標記
+    KEY.forEach(k => {
+      const m = Math.exp(k.x);
+      const px = multToPx(m), py = yToPx(rateOf(m));
+      ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI*2);
+      ctx.fillStyle = '#d9b26a'; ctx.fill();
+    });
+
+    // hover
+    if (hoverMult){
+      const px = multToPx(hoverMult), py = yToPx(rateOf(hoverMult));
+      ctx.setLineDash([4,4]);
+      ctx.strokeStyle = '#7fb5e0';
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, H - PAD.b); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI*2);
+      ctx.fillStyle = '#7fb5e0'; ctx.fill();
+    }
+
+    // 當前位置
+    const cx = Math.min(multToPx(curMult), W - PAD.r);
+    const cy = yToPx(curRate);
+    ctx.setLineDash([2,3]);
+    ctx.strokeStyle = 'rgba(217,178,106,.6)';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, H - PAD.b); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD.l, cy); ctx.lineTo(cx, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(217,178,106,.25)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 3.6, 0, Math.PI*2);
+    ctx.fillStyle = '#d9b26a'; ctx.fill();
+    ctx.strokeStyle = '#12100f'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+
+  // ---------- 主更新 ----------
+  function update(){
+    const mults = inputs.map(inp => +inp.value / 10); // 100% -> 10 倍
+    const product = mults.reduce((a, b) => a * b, 1);
+    const geo = Math.pow(product, 1 / N);
+    const rate = rateOf(geo);
+
+    document.getElementById('rate').textContent = rate.toFixed(2) + '%';
+    document.getElementById('modeLine').innerHTML =
+      `綜合倍數 <b>${geo.toFixed(2)}×</b>`;
+
+    inputs.forEach((inp, i) => {
+      setFill(inp);
+      vals[i].textContent = (+inp.value).toLocaleString('en-US') + '%';
+    });
+
+    // 當前資訊
+    const nextRef = [2, 5, 10, 20, 30].find(m => m > geo) ?? null;
+    document.getElementById('nextInfo').innerHTML = `
+      <div class="row"><span>綜合倍數</span><span>${geo.toFixed(3)} ×</span></div>
+      <div class="row"><span>當前掉落率（曲線值）</span><span class="hi">${rate.toFixed(2)} %</span></div>
+      ${nextRef ? `<div class="row"><span>到 ${nextRef}× 時約</span><span>${rateOf(nextRef).toFixed(2)} %</span></div>` : ''}
+      <div class="row"><span>每 1× 目前約增加</span><span>${((rateOf(geo+1)-rate)/(1)).toFixed(2)} %</span></div>
+    `;
+
+    // 參考點表
+    const refs = [1, 2, 3, 5, 7, 10, 15, 20, 25, 30];
+    document.getElementById('refBody').innerHTML = refs.map(m => {
+      const active = Math.abs(m - geo) < 0.5;
+      return `<tr style="${active?'background:rgba(217,178,106,.12);color:var(--gold);font-weight:600':''}">
+        <td style="padding:7px 6px;border-bottom:1px solid var(--line)">${m}×</td>
+        <td style="padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;font-family:Consolas,monospace">${rateOf(m).toFixed(2)}%</td>
       </tr>`;
     }).join('');
 
-    // 檔位進度條 (分段寬度依門檻)
-    const bar = document.getElementById('tierbar');
-    bar.innerHTML =
-      `<div style="width:12.5%;background:#3a3330"></div>
-       <div style="width:12.5%;background:#7fb5e0"></div>
-       <div style="width:25%;background:#7fd17f"></div>
-       <div style="width:50%;background:#d9b26a"></div>`;
-
-    // 下一檔資訊
-    const next = document.getElementById('nextInfo');
-    if (nt){
-      const needProduct = Math.pow(nt.mult, N);      // 需要的邊長乘積
-      const curProduct = product;
-      const progress = Math.min(100, (Math.log(geo) / Math.log(nt.mult)) * 100);
-      next.innerHTML = `
-        <div class="row"><span>綜合倍數</span><span>${geo.toFixed(4)} ×</span></div>
-        <div class="row"><span>下一檔 ${nt.mult}×（${nt.rate.toFixed(2)}%）</span><span>還差 ${(nt.mult - geo).toFixed(4)} ×</span></div>
-        <div class="progress"><i style="width:${progress}%"></i></div>
-        <div class="hint" style="margin-top:8px">若六根同值，需每根約 ${Math.round(Math.pow(needProduct, 1/N) * 100)}% 才能到 ${nt.mult}×。</div>`;
-    } else {
-      next.innerHTML = `
-        <div class="row"><span>綜合倍數</span><span>${geo.toFixed(4)} ×</span></div>
-        <div class="row"><span>已達最高檔 20×</span><span>7.50%</span></div>
-        <div class="progress"><i style="width:100%"></i></div>`;
-    }
-
-    // 計算式
     document.getElementById('formula').innerHTML = `
       (${mults.map(m => m.toFixed(2)).join(' × ')})<br>
       = ${product.toFixed(4)}<br>
-      <sup>${N}</sup>√${product.toFixed(4)} = <span style="color:var(--gold)">${geo.toFixed(4)} ×</span>
+      <sup>6</sup>√${product.toFixed(4)} = <span style="color:var(--gold)">${geo.toFixed(4)} ×</span><br>
+      掉落率 = <span style="color:var(--green)">${rate.toFixed(2)}%</span>
     `;
+
+    drawChart(geo, rate);
   }
+
+  // 滑鼠 hover 顯示曲線上的值
+  canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (W / r.width);
+    const t = (px - PAD.l) / (W - PAD.l - PAD.r);
+    if (t < 0 || t > 1){ hoverMult = null; }
+    else hoverMult = Math.exp(t * XMAX);
+    update();
+    canvas.title = hoverMult ? `${hoverMult.toFixed(1)}× → ${rateOf(hoverMult).toFixed(2)}%` : '';
+  });
+  canvas.addEventListener('mouseleave', () => { hoverMult = null; update(); });
 
   inputs.forEach(inp => inp.addEventListener('input', update));
   slidersHost.querySelectorAll('.quick button').forEach(btn => {
     btn.addEventListener('click', () => {
-      const i = +btn.dataset.i;
-      inputs[i].value = btn.dataset.v;
+      inputs[+btn.dataset.i].value = btn.dataset.v;
       update();
     });
   });
@@ -282,6 +471,62 @@
   });
 
   update();
+
+  // ---------- 版本檢查 ----------
+  (function versionCheck(){
+    const shaEl      = document.getElementById('verSha');
+    const timeEl     = document.getElementById('verTime');
+    const statusHost = document.getElementById('verStatus');
+    const bar        = document.getElementById('updateBar');
+
+    const qs  = new URLSearchParams(location.search);
+    const sha = qs.get('v') || document.querySelector('meta[name="build-sha"]').content;
+    const time = document.querySelector('meta[name="build-time"]').content;
+
+    const isDev = !sha || sha.indexOf('{{') === 0;   // 本機直接開檔，佔位符沒被替換
+    const short = isDev ? 'dev' : sha.slice(0, 7);
+
+    shaEl.textContent = short;
+    shaEl.title = isDev ? '本機開發版本（未經 GitHub Actions 建置）' : sha;
+    if (time && time.indexOf('{{') !== 0) timeEl.textContent = `部署時間 ${time}（台北）`;
+
+    function pill(cls, text, title){
+      statusHost.innerHTML = `<span class="pill ${cls}" title="${title || ''}">${text}</span>`;
+    }
+
+    if (isDev){
+      pill('dev', '本機版本', '這個頁面不是從 GitHub Pages 載入的');
+      return;
+    }
+
+    // GitHub API：拿 main 分支最新 commit
+    const apiUrl = `https://api.github.com/repos/eanickname9527/RO_BossCard/commits/main?t=${Date.now()}`;
+
+    fetch(apiUrl, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } })
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        const latest = data && data.sha ? data.sha.toLowerCase() : null;
+        if (!latest){ pill('err', '無法確認版本'); return; }
+
+        if (latest === sha.toLowerCase()){
+          pill('ok', '✓ 已是最新版本');
+        } else {
+          pill('new', '有新版本 ' + latest.slice(0, 7));
+          bar.classList.add('show');
+          bar.innerHTML = `GitHub 上已有更新版本 <b>${latest.slice(0, 7)}</b>
+            <button id="reloadBtn">立即更新</button>`;
+          bar.querySelector('#reloadBtn').addEventListener('click', () => {
+            // 帶上 sha 參數強制重新抓取檔案（避開快取）
+            const url = new URL(location.href);
+            url.searchParams.set('v', latest.slice(0, 7));
+            location.replace(url.toString());
+          });
+        }
+      })
+      .catch(err => {
+        pill('err', '版本檢查失敗', err.message + '（可能離線或 API 額度用完）');
+      });
+  })();
 })();
 </script>
 </body>

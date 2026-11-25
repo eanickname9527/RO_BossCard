@@ -1,0 +1,51 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject commit SHA
+        run: |
+          SHA="${{ github.sha }}"
+          SHA_SHORT="${SHA:0:7}"
+          DEPLOYED_AT="$(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M:%S')"
+          mkdir -p dist
+          sed -e "s/{{COMMIT_SHA}}/$SHA/g" \
+              -e "s/{{COMMIT_SHA_SHORT}}/$SHA_SHORT/g" \
+              -e "s/{{BUILD_TIME}}/$DEPLOYED_AT/g" \
+              index.html > dist/index.html
+          echo "Deployed $SHA_SHORT at $DEPLOYED_AT"
+          grep -c "$SHA" dist/index.html || true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
