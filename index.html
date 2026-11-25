@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RO 道具掉落率計算器</title>
+<style>
+  :root{
+    --bg:#12100f;
+    --panel:#1d1a18;
+    --panel2:#262220;
+    --line:#3a3330;
+    --text:#efe6d8;
+    --muted:#a99b88;
+    --gold:#d9b26a;
+    --green:#7fd17f;
+    --red:#e07a6a;
+    --blue:#7fb5e0;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh;
+    background:radial-gradient(circle at 20% 0%, #2a2119 0%, var(--bg) 55%) fixed;
+    color:var(--text);
+    font-family:"Segoe UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+    padding:24px 16px 48px;
+  }
+  h1{
+    text-align:center; font-size:22px; font-weight:600; letter-spacing:2px;
+    color:var(--gold); margin:0 0 4px;
+  }
+  .sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:22px}
+  .wrap{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1fr 340px;gap:20px}
+  @media (max-width:860px){.wrap{grid-template-columns:1fr}}
+  .panel{
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line); border-radius:12px; padding:18px 20px;
+    box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .panel h2{
+    font-size:13px;letter-spacing:2px;color:var(--gold);margin:0 0 14px;font-weight:600;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .slider-row{margin-bottom:16px}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .slider-label{font-size:14px;color:var(--muted)}
+  .slider-val{font-family:Consolas,monospace;font-size:18px;color:var(--gold);font-weight:600}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:4px;outline:none;
+    background:linear-gradient(90deg,var(--gold) 0 var(--p,0%), #3a3330 var(--p,0%) 100%);
+    cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ffe9b8,#c99a4a 70%);
+    border:2px solid #5a4624; box-shadow:0 2px 6px rgba(0,0,0,.6);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ffe9b8,#c99a4a 70%);
+    border:2px solid #5a4624;
+  }
+  .quick{display:flex;gap:6px;margin-top:6px}
+  .quick button{
+    flex:1;background:#2d2825;border:1px solid var(--line);color:var(--muted);
+    border-radius:6px;font-size:12px;padding:4px 0;cursor:pointer;
+  }
+  .quick button:hover{color:var(--gold);border-color:var(--gold)}
+
+  .result-panel{display:flex;flex-direction:column;gap:14px}
+  .big{
+    text-align:center;padding:18px 10px;border-radius:10px;background:#151210;
+    border:1px solid var(--line);
+  }
+  .big .k{font-size:12px;color:var(--muted);letter-spacing:2px}
+  .big .v{font-family:Consolas,monospace;font-size:38px;font-weight:700;color:var(--green);line-height:1.15;margin-top:4px}
+  .mode{
+    text-align:center;font-size:13px;color:var(--muted);margin-top:4px;
+  }
+  .mode b{color:var(--text)}
+  .tierbar{height:10px;border-radius:5px;overflow:hidden;background:#2a2422;display:flex}
+  .tierbar div{height:100%}
+  .legend{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-top:6px}
+
+  table.tiers{width:100%;border-collapse:collapse;font-size:13px}
+  table.tiers th,table.tiers td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line)}
+  table.tiers th{color:var(--muted);font-weight:500;font-size:12px}
+  table.tiers td:first-child,table.tiers th:first-child{text-align:left}
+  table.tiers tr.active{background:rgba(217,178,106,.12)}
+  table.tiers tr.active td{color:var(--gold);font-weight:600}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+
+  .next{margin-top:2px;font-size:13px;background:#151210;border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+  .next .row{display:flex;justify-content:space-between;margin:8px 0}
+  .next .row span:first-child{color:var(--muted)}
+  .next .row span:last-child{font-family:Consolas,monospace;color:var(--text)}
+  .progress{height:6px;background:#2a2422;border-radius:3px;overflow:hidden;margin-top:6px}
+  .progress i{display:block;height:100%;background:var(--blue);width:0%}
+  .hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6}
+  .reset{
+    width:100%;padding:9px;border-radius:8px;background:#2d2825;border:1px solid var(--line);
+    color:var(--muted);cursor:pointer;font-size:13px;letter-spacing:1px;
+  }
+  .reset:hover{color:var(--gold);border-color:var(--gold)}
+</style>
+</head>
+<body>
+  <h1>RO 王卡掉落率計算器</h1>
+  <div class="sub">六根滑桿倍數相乘後開六次方 = 綜合倍數，依倍數區間換算額外掉落率</div>
+
+  <div class="wrap">
+    <div class="panel">
+      <h2>倍率滑桿（100% ~ 2000%）</h2>
+      <div id="sliders"></div>
+      <button class="reset" id="resetBtn">全部重置為 100%</button>
+    </div>
+
+    <div class="result-panel">
+      <div class="panel">
+        <h2>即時結果</h2>
+        <div class="big">
+          <div class="k">額外掉落率</div>
+          <div class="v" id="rate">0.00%</div>
+          <div class="mode" id="modeLine">未達門檻</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>綜合倍數 / 檔位</h2>
+        <table class="tiers" id="tierTable">
+          <thead>
+            <tr><th>倍數</th><th>掉落率</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="tierbar" id="tierbar"></div>
+        <div class="legend"><span>0×</span><span>5×</span><span>10×</span><span>20×</span></div>
+        <div class="next" id="nextInfo"></div>
+      </div>
+
+      <div class="panel">
+        <h2>計算式</h2>
+        <div style="font-family:Consolas,monospace;font-size:13px;line-height:1.9" id="formula"></div>
+        <div class="hint">
+          規則：六根滑桿倍數相乘 → 開 6 次方（幾何平均）。<br>
+          5 倍以上 = 2%，10 倍以上 = 5%，20 倍以上 = 7.5%。
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const MIN = 100, MAX = 2000, STEP = 1, N = 6;
+
+  // 倍數門檻由低到高
+  const TIERS = [
+    { mult: 1,  rate: 0,    color: '#3a3330' },
+    { mult: 5,  rate: 2,    color: '#7fb5e0' },
+    { mult: 10, rate: 5,    color: '#7fd17f' },
+    { mult: 20, rate: 7.5,  color: '#d9b26a' },
+  ];
+
+  const slidersHost = document.getElementById('sliders');
+  const inputs = [];
+  const vals = [];
+
+  for (let i = 0; i < N; i++) {
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    row.innerHTML = `
+      <div class="slider-top">
+        <span class="slider-label">滑桿 ${i + 1}</span>
+        <span class="slider-val" id="v${i}">100%</span>
+      </div>
+      <input type="range" min="${MIN}" max="${MAX}" step="${STEP}" value="${MIN}" id="s${i}">
+      <div class="quick">
+        <button data-i="${i}" data-v="100">100%</button>
+        <button data-i="${i}" data-v="500">500%</button>
+        <button data-i="${i}" data-v="1000">1000%</button>
+        <button data-i="${i}" data-v="2000">2000%</button>
+      </div>`;
+    slidersHost.appendChild(row);
+    inputs.push(row.querySelector('input'));
+    vals.push(row.querySelector('.slider-val'));
+  }
+
+  function getRate(mult){
+    let rate = 0;
+    for (const t of TIERS) if (mult >= t.mult) rate = t.rate;
+    return rate;
+  }
+  function nextTier(mult){
+    for (const t of TIERS) if (t.mult > mult) return t;
+    return null;
+  }
+
+  function fmtPct(p){ return p.toLocaleString('en-US') + '%'; }
+  function setFill(el){
+    const p = ((+el.value - MIN) / (MAX - MIN)) * 100;
+    el.style.setProperty('--p', p + '%');
+  }
+
+  function update(){
+    const mults = inputs.map(inp => +inp.value / 100); // 100% -> 1.0
+    const product = mults.reduce((a, b) => a * b, 1);
+    const geo = Math.pow(product, 1 / N);
+
+    const rate = getRate(geo);
+    const nt = nextTier(geo);
+
+    // 大數字
+    document.getElementById('rate').textContent = rate.toFixed(2) + '%';
+    const modeLine = document.getElementById('modeLine');
+    const hit = TIERS.filter(t => t.mult > 1 && geo >= t.mult).pop();
+    modeLine.innerHTML = hit
+      ? `已達成 <b>${hit.mult}×</b> 檔位`
+      : '未達 5× 門檻（0%）';
+
+    // 每根滑桿數值
+    inputs.forEach((inp, i) => {
+      setFill(inp);
+      vals[i].textContent = fmtPct(+inp.value);
+    });
+
+    // 檔位表
+    const tbody = document.querySelector('#tierTable tbody');
+    tbody.innerHTML = TIERS.map(t => {
+      const isActive = getRate(geo) === t.rate && (t.rate > 0 || geo < 5);
+      return `<tr class="${isActive ? 'active' : ''}">
+        <td><span class="dot" style="background:${t.color}"></span>${t.mult}× 以上</td>
+        <td>${t.rate.toFixed(2)}%</td>
+        <td>${geo >= t.mult ? '✔' : ''}</td>
+      </tr>`;
+    }).join('');
+
+    // 檔位進度條 (分段寬度依門檻)
+    const bar = document.getElementById('tierbar');
+    bar.innerHTML =
+      `<div style="width:12.5%;background:#3a3330"></div>
+       <div style="width:12.5%;background:#7fb5e0"></div>
+       <div style="width:25%;background:#7fd17f"></div>
+       <div style="width:50%;background:#d9b26a"></div>`;
+
+    // 下一檔資訊
+    const next = document.getElementById('nextInfo');
+    if (nt){
+      const needProduct = Math.pow(nt.mult, N);      // 需要的邊長乘積
+      const curProduct = product;
+      const progress = Math.min(100, (Math.log(geo) / Math.log(nt.mult)) * 100);
+      next.innerHTML = `
+        <div class="row"><span>綜合倍數</span><span>${geo.toFixed(4)} ×</span></div>
+        <div class="row"><span>下一檔 ${nt.mult}×（${nt.rate.toFixed(2)}%）</span><span>還差 ${(nt.mult - geo).toFixed(4)} ×</span></div>
+        <div class="progress"><i style="width:${progress}%"></i></div>
+        <div class="hint" style="margin-top:8px">若六根同值，需每根約 ${Math.round(Math.pow(needProduct, 1/N) * 100)}% 才能到 ${nt.mult}×。</div>`;
+    } else {
+      next.innerHTML = `
+        <div class="row"><span>綜合倍數</span><span>${geo.toFixed(4)} ×</span></div>
+        <div class="row"><span>已達最高檔 20×</span><span>7.50%</span></div>
+        <div class="progress"><i style="width:100%"></i></div>`;
+    }
+
+    // 計算式
+    document.getElementById('formula').innerHTML = `
+      (${mults.map(m => m.toFixed(2)).join(' × ')})<br>
+      = ${product.toFixed(4)}<br>
+      <sup>${N}</sup>√${product.toFixed(4)} = <span style="color:var(--gold)">${geo.toFixed(4)} ×</span>
+    `;
+  }
+
+  inputs.forEach(inp => inp.addEventListener('input', update));
+  slidersHost.querySelectorAll('.quick button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = +btn.dataset.i;
+      inputs[i].value = btn.dataset.v;
+      update();
+    });
+  });
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    inputs.forEach(inp => inp.value = MIN);
+    update();
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>
