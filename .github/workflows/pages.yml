@@ -22,17 +22,27 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Inject commit SHA
+        env:
+          SHA_FULL: ${{ github.sha }}
         run: |
-          SHA="${{ github.sha }}"
-          SHA_SHORT="${SHA:0:7}"
-          DEPLOYED_AT="$(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M:%S')"
+          set -euo pipefail
+          SHORT="${SHA_FULL:0:7}"
+          BUILT_AT="$(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M:%S')"
           mkdir -p dist
-          sed -e "s/{{COMMIT_SHA}}/$SHA/g" \
-              -e "s/{{COMMIT_SHA_SHORT}}/$SHA_SHORT/g" \
-              -e "s/{{BUILD_TIME}}/$DEPLOYED_AT/g" \
-              index.html > dist/index.html
-          echo "Deployed $SHA_SHORT at $DEPLOYED_AT"
-          grep -c "$SHA" dist/index.html || true
+
+          # 用 perl 做字面替換，避免 / & 等字元干擾
+          SHA_FULL="$SHA_FULL" SHORT="$SHORT" BUILT_AT="$BUILT_AT" perl -0pe '
+            s/\{\{COMMIT_SHA\}\}/$ENV{SHA_FULL}/g;
+            s/\{\{COMMIT_SHA_SHORT\}\}/$ENV{SHORT}/g;
+            s/\{\{BUILD_TIME\}\}/$ENV{BUILT_AT}/g;
+          ' index.html > dist/index.html
+
+          echo "=== 替換結果 ==="
+          grep -n 'name="build-' dist/index.html
+          if grep -q '{{COMMIT_SHA}}' dist/index.html; then
+            echo "::error::仍有未替換的 COMMIT_SHA 佔位符"; exit 1
+          fi
+          echo "SHA=$SHA_FULL ($SHORT) @ $BUILT_AT"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
